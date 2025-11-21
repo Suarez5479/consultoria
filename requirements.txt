@@ -1,6 +1,42 @@
-streamlit==1.28.0
-pandas==2.1.0
-matplotlib==3.7.0
-seaborn==0.12.2
-plotly==5.15.0
-numpy==1.24.0
+streamlit
+pandas
+matplotlib
+seaborn
+plotly
+requests
+numpy
+
+streamlit
+pandas
+matplotlib
+seaborn
+plotly
+requests
+numpy
+```
+
+---
+
+## 🚀 Cómo Usarlo
+
+### **Paso 1: Sube tu CSV a la nube**
+
+Elige una opción:
+
+#### **Opción A: GitHub (Más fácil)** ⭐
+
+1. Crea un repositorio en GitHub
+2. Sube `delitos_con_poblacion_limpio.csv`
+3. Abre el archivo y haz clic en **"Raw"**
+4. Copia la URL (ejemplo):
+```
+   https://raw.githubusercontent.com/tu-usuario/tu-repo/main/delitos_con_poblacion_limpio.csv
+```
+
+#### **Opción B: Google Drive**
+
+1. Sube el CSV a Google Drive
+2. Clic derecho → **Compartir** → "Cualquier persona con el enlace"
+3. Copia el ID del enlace y úsalo así:
+```
+   https://drive.google.com/uc?export=download&id=TU_ID_AQUI
