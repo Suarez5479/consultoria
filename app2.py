@@ -8,6 +8,8 @@ from datetime import datetime
 import numpy as np
 import os
 import warnings
+import requests  # 👈 AGREGAR ESTA LÍNEA
+from io import StringIO  # 👈 AGREGAR ESTA LÍNEA
 warnings.filterwarnings('ignore')
 
 # =====================================================================
@@ -217,39 +219,123 @@ PALETA_ROJA = [
 ]
 
 # ============================================
-# FUNCIÓN ROBUSTA PARA CARGAR LA BASE DE DATOS
+# FUNCIÓN MEJORADA PARA CARGAR LA BASE DE DATOS
 # ============================================
 @st.cache_data
 def load_data():
-    ruta = r"C:\Users\ASUS\OneDrive - Universidad Santo Tomás\SANTO TOMAS\8-SEMESTRE\CONSULTORIA\Datos-abiertos-Seguridad-y-Convivencia\delitos_con_poblacion_limpio.csv"
+    """
+    Carga datos desde múltiples fuentes:
+    1. URL en la nube (GitHub, Google Drive, Dropbox)
+    2. Archivo local (ruta fija)
+    3. Upload del usuario
+    """
+    
+    # ========================================
+    # OPCIÓN 1: URL DE LA NUBE
+    # ========================================
+    # 👇 COLOCA AQUÍ LA URL DE TU CSV EN LA NUBE
+    CSV_URL = ""  
+    
+    # Ejemplos de URLs válidas:
+    # GitHub Raw: "https://raw.githubusercontent.com/usuario/repo/main/archivo.csv"
+    # Google Drive: "https://drive.google.com/uc?export=download&id=TU_ID_AQUI"
+    # Dropbox: "https://www.dropbox.com/s/abc123/archivo.csv?dl=1"
+    
     df = None
-
-    if os.path.exists(ruta):
+    
+    # Intentar cargar desde URL si está configurada
+    if CSV_URL:
         try:
-            df = pd.read_csv(ruta, encoding="utf-8", low_memory=False)
-        except UnicodeDecodeError:
+            st.info("🌐 Cargando datos desde la nube...")
+            response = requests.get(CSV_URL, timeout=30)
+            response.raise_for_status()
+            
+            # Intentar diferentes encodings
             try:
-                df = pd.read_csv(ruta, encoding="latin-1", low_memory=False)
-            except Exception as e:
-                st.warning(f"No se pudo leer el archivo desde la ruta fija: {e}")
+                csv_data = StringIO(response.content.decode('utf-8'))
+                df = pd.read_csv(csv_data, low_memory=False)
+                st.success(f"✅ Datos cargados desde la nube: {len(df):,} registros")
+                return df
+            except UnicodeDecodeError:
+                csv_data = StringIO(response.content.decode('latin-1'))
+                df = pd.read_csv(csv_data, low_memory=False)
+                st.success(f"✅ Datos cargados desde la nube: {len(df):,} registros")
+                return df
+                
+        except requests.exceptions.RequestException as e:
+            st.warning(f"⚠️ No se pudo cargar desde URL. Intentando ruta local...")
         except Exception as e:
-            st.warning(f"Error al leer el archivo: {e}")
-
+            st.warning(f"⚠️ Error al procesar archivo desde URL. Intentando ruta local...")
+    
+    # ========================================
+    # OPCIÓN 2: RUTA LOCAL (tu ruta actual)
+    # ========================================
+    ruta_local = r"C:\Users\ASUS\OneDrive - Universidad Santo Tomás\SANTO TOMAS\8-SEMESTRE\CONSULTORIA\Datos-abiertos-Seguridad-y-Convivencia\delitos_con_poblacion_limpio.csv"
+    
     if df is None:
-        archivo = st.file_uploader("Sube el archivo CSV con los datos de delitos", type=["csv"])
+        if os.path.exists(ruta_local):
+            try:
+                st.info("💾 Cargando desde archivo local...")
+                df = pd.read_csv(ruta_local, encoding="utf-8", low_memory=False)
+                st.success(f"✅ Datos cargados desde ruta local: {len(df):,} registros")
+                return df
+            except UnicodeDecodeError:
+                try:
+                    df = pd.read_csv(ruta_local, encoding="latin-1", low_memory=False)
+                    st.success(f"✅ Datos cargados desde ruta local: {len(df):,} registros")
+                    return df
+                except Exception as e:
+                    st.warning(f"⚠️ Error con ruta local: {str(e)}")
+            except Exception as e:
+                st.warning(f"⚠️ Error al cargar archivo local: {str(e)}")
+        else:
+            st.warning("⚠️ Archivo no encontrado en la ruta local")
+    
+    # ========================================
+    # OPCIÓN 3: UPLOAD MANUAL DEL USUARIO
+    # ========================================
+    if df is None:
+        st.error("❌ No se pudo cargar el archivo automáticamente")
+        st.markdown("---")
+        st.subheader("📤 Sube tu archivo CSV manualmente")
+        
+        st.info("""
+        **💡 Opciones para cargar los datos:**
+        
+        1. **Configura la URL en la nube** (Recomendado):
+           - Sube tu CSV a GitHub, Google Drive o Dropbox
+           - Obtén la URL directa del archivo
+           - Pégala en la variable `CSV_URL` del código (línea 243)
+        
+        2. **Verifica la ruta local**:
+           - Asegúrate de que el archivo existe
+           - Verifica los permisos de lectura
+        
+        3. **Sube el archivo manualmente** (opción temporal):
+           - Usa el botón de abajo para cargar el CSV
+        """)
+        
+        archivo = st.file_uploader(
+            "Arrastra o selecciona 'delitos_con_poblacion_limpio.csv'",
+            type=["csv"],
+            help="El archivo debe ser un CSV con los datos de delitos"
+        )
+        
         if archivo is not None:
             try:
                 df = pd.read_csv(archivo, encoding="utf-8", low_memory=False)
-                st.success("Archivo cargado correctamente desde el navegador.")
+                st.success(f"✅ Archivo cargado correctamente: {len(df):,} registros")
+                return df
             except UnicodeDecodeError:
                 try:
                     df = pd.read_csv(archivo, encoding="latin-1", low_memory=False)
-                    st.success("Archivo cargado correctamente desde el navegador.")
+                    st.success(f"✅ Archivo cargado correctamente: {len(df):,} registros")
+                    return df
                 except Exception as e:
-                    st.error(f"Error al cargar el archivo: {e}")
+                    st.error(f"❌ Error al cargar archivo: {str(e)}")
             except Exception as e:
-                st.error(f"Error al cargar el archivo: {e}")
-
+                st.error(f"❌ Error al cargar archivo: {str(e)}")
+    
     return df
 
 # =========================================================
