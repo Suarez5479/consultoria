@@ -218,131 +218,119 @@ PALETA_ROJA = [
     '#267DD4', '#145CA5'
 ]
 
-# ============================================
-# FUNCIÓN MEJORADA PARA CARGAR LA BASE DE DATOS
-# ============================================
-@st.cache_data
-def load_data():
+# =====================================================================
+# FUNCIÓN PARA CARGAR DATOS DESDE ZIP
+# =====================================================================
+@st.cache_data(show_spinner=False)
+def cargar_datos_desde_zip(zip_path, csv_filename):
     """
-    Carga datos desde múltiples fuentes:
-    1. URL en la nube (GitHub, Google Drive, Dropbox)
-    2. Archivo local (ruta fija)
-    3. Upload del usuario
+    Carga un CSV desde un archivo ZIP en el repositorio
+    
+    Args:
+        zip_path: Ruta al archivo .zip (ej: 'delitos_con_poblacion_limpio.zip')
+        csv_filename: Nombre del CSV dentro del ZIP (ej: 'delitos_con_poblacion_limpio.csv')
     """
-    
-    # ========================================
-    # OPCIÓN 1: URL DE LA NUBE
-    # ========================================
-    # 👇 COLOCA AQUÍ LA URL DE TU CSV EN LA NUBE
-    CSV_URL = ""  
-    
-    # Ejemplos de URLs válidas:
-    # GitHub Raw: "https://raw.githubusercontent.com/usuario/repo/main/archivo.csv"
-    # Google Drive: "https://drive.google.com/uc?export=download&id=TU_ID_AQUI"
-    # Dropbox: "https://www.dropbox.com/s/abc123/archivo.csv?dl=1"
-    
-    df = None
-    
-    # Intentar cargar desde URL si está configurada
-    if CSV_URL:
-        try:
-            st.info("🌐 Cargando datos desde la nube...")
-            response = requests.get(CSV_URL, timeout=30)
-            response.raise_for_status()
+    try:
+        # Verificar que el ZIP existe
+        if not os.path.exists(zip_path):
+            st.error(f"❌ No se encontró el archivo: {zip_path}")
+            st.info(f"🔍 Buscando en: {os.getcwd()}")
+            st.info(f"📁 Archivos disponibles: {os.listdir('.')}")
+            return None
+        
+        # Extraer y leer el CSV del ZIP
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            # Listar archivos en el ZIP
+            archivos_en_zip = zip_ref.namelist()
+            st.info(f"📦 Archivos en el ZIP: {', '.join(archivos_en_zip)}")
             
-            # Intentar diferentes encodings
-            try:
-                csv_data = StringIO(response.content.decode('utf-8'))
-                df = pd.read_csv(csv_data, low_memory=False)
-                st.success(f"✅ Datos cargados desde la nube: {len(df):,} registros")
-                return df
-            except UnicodeDecodeError:
-                csv_data = StringIO(response.content.decode('latin-1'))
-                df = pd.read_csv(csv_data, low_memory=False)
-                st.success(f"✅ Datos cargados desde la nube: {len(df):,} registros")
-                return df
-                
-        except requests.exceptions.RequestException as e:
-            st.warning(f"⚠️ No se pudo cargar desde URL. Intentando ruta local...")
-        except Exception as e:
-            st.warning(f"⚠️ Error al procesar archivo desde URL. Intentando ruta local...")
-    
-    # ========================================
-    # OPCIÓN 2: RUTA LOCAL (tu ruta actual)
-    # ========================================
-    ruta_local = r"C:\Users\ASUS\OneDrive - Universidad Santo Tomás\SANTO TOMAS\8-SEMESTRE\CONSULTORIA\Datos-abiertos-Seguridad-y-Convivencia\delitos_con_poblacion_limpio.csv"
-    
-    if df is None:
-        if os.path.exists(ruta_local):
-            try:
-                st.info("💾 Cargando desde archivo local...")
-                df = pd.read_csv(ruta_local, encoding="utf-8", low_memory=False)
-                st.success(f"✅ Datos cargados desde ruta local: {len(df):,} registros")
-                return df
-            except UnicodeDecodeError:
+            # Buscar el archivo CSV
+            if csv_filename not in archivos_en_zip:
+                st.error(f"❌ El archivo '{csv_filename}' no está en el ZIP")
+                st.info(f"Archivos disponibles: {', '.join(archivos_en_zip)}")
+                return None
+            
+            # Leer el CSV directamente desde el ZIP
+            with zip_ref.open(csv_filename) as file:
+                # Intentar con diferentes encodings
                 try:
-                    df = pd.read_csv(ruta_local, encoding="latin-1", low_memory=False)
-                    st.success(f"✅ Datos cargados desde ruta local: {len(df):,} registros")
-                    return df
-                except Exception as e:
-                    st.warning(f"⚠️ Error con ruta local: {str(e)}")
-            except Exception as e:
-                st.warning(f"⚠️ Error al cargar archivo local: {str(e)}")
-        else:
-            st.warning("⚠️ Archivo no encontrado en la ruta local")
+                    df = pd.read_csv(file, encoding='utf-8')
+                except UnicodeDecodeError:
+                    file.seek(0)  # Volver al inicio del archivo
+                    try:
+                        df = pd.read_csv(file, encoding='latin1')
+                    except:
+                        file.seek(0)
+                        df = pd.read_csv(file, encoding='cp1252')
+        
+        return df
+        
+    except zipfile.BadZipFile:
+        st.error("❌ El archivo no es un ZIP válido")
+        return None
+    except Exception as e:
+        st.error(f"❌ Error al cargar datos: {e}")
+        import traceback
+        st.code(traceback.format_exc())
+        return None
+
+# =====================================================================
+# CARGA AUTOMÁTICA DE DATOS
+# =====================================================================
+# 🎯 RUTAS CORREGIDAS - Solo el nombre del archivo (está en la raíz del repo)
+ZIP_PATH = "delitos_con_poblacion_limpio.zip"  # ✅ Archivo en la raíz del repositorio GitHub
+CSV_FILENAME = "delitos_con_poblacion_limpio.csv"  # ✅ Nombre del CSV dentro del ZIP
+
+# Cargar datos con indicador de progreso
+if 'df' not in st.session_state:
+    st.info("📦 Cargando datos desde el repositorio...")
+    progress_bar = st.progress(0)
+    status_text = st.empty()
     
-    # ========================================
-    # OPCIÓN 3: UPLOAD MANUAL DEL USUARIO
-    # ========================================
-    if df is None:
-        st.error("❌ No se pudo cargar el archivo automáticamente")
-        st.markdown("---")
-        st.subheader("📤 Sube tu archivo CSV manualmente")
+    status_text.text("🔓 Extrayendo archivo ZIP...")
+    progress_bar.progress(33)
+    
+    status_text.text("📊 Leyendo datos CSV...")
+    progress_bar.progress(66)
+    
+    df = cargar_datos_desde_zip(ZIP_PATH, CSV_FILENAME)
+    
+    if df is not None:
+        status_text.text("✅ Datos cargados correctamente")
+        progress_bar.progress(100)
+        st.session_state['df'] = df
+        st.success(f"✅ {len(df):,} registros cargados exitosamente")
+        progress_bar.empty()
+        status_text.empty()
+    else:
+        progress_bar.empty()
+        status_text.empty()
+        st.error("❌ No se pudieron cargar los datos")
+        
+        # Mostrar diagnóstico detallado
+        st.warning("🔍 **Diagnóstico del problema:**")
+        st.code(f"Directorio actual: {os.getcwd()}")
+        st.code(f"Archivos en raíz: {os.listdir('.')}")
         
         st.info("""
-        **💡 Opciones para cargar los datos:**
+        **✅ Solución:**
         
-        1. **Configura la URL en la nube** (Recomendado):
-           - Sube tu CSV a GitHub, Google Drive o Dropbox
-           - Obtén la URL directa del archivo
-           - Pégala en la variable `CSV_URL` del código (línea 243)
+        Tu estructura en GitHub debe ser:
+        ```
+        consultoria/
+        ├── app2.py  (o app.py)
+        ├── requirements.txt
+        └── delitos_con_poblacion_limpio.zip  ← Debe estar aquí
+        ```
         
-        2. **Verifica la ruta local**:
-           - Asegúrate de que el archivo existe
-           - Verifica los permisos de lectura
-        
-        3. **Sube el archivo manualmente** (opción temporal):
-           - Usa el botón de abajo para cargar el CSV
+        **Verifica en GitHub:**
+        1. Ve a: https://github.com/Suarez5479/consultoria
+        2. Asegúrate de ver el archivo `delitos_con_poblacion_limpio.zip` en la lista
+        3. Si no está, súbelo a la raíz del repositorio (NO en carpetas)
         """)
-        
-        archivo = st.file_uploader(
-            "Arrastra o selecciona 'delitos_con_poblacion_limpio.csv'",
-            type=["csv"],
-            help="El archivo debe ser un CSV con los datos de delitos"
-        )
-        
-        if archivo is not None:
-            try:
-                df = pd.read_csv(archivo, encoding="utf-8", low_memory=False)
-                st.success(f"✅ Archivo cargado correctamente: {len(df):,} registros")
-                return df
-            except UnicodeDecodeError:
-                try:
-                    df = pd.read_csv(archivo, encoding="latin-1", low_memory=False)
-                    st.success(f"✅ Archivo cargado correctamente: {len(df):,} registros")
-                    return df
-                except Exception as e:
-                    st.error(f"❌ Error al cargar archivo: {str(e)}")
-            except Exception as e:
-                st.error(f"❌ Error al cargar archivo: {str(e)}")
-    
-    return df
+        st.stop()
 
-# =========================================================
-# CARGA DEL DATASET
-# =========================================================
-df = load_data()
-
+df = st.session_state.get('df', None)
 # ================================================================
 # VERIFICACIÓN DE DATOS Y CONFIGURACIÓN DE INTERFAZ
 # ================================================================
